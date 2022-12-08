@@ -1,0 +1,25 @@
+# Aligned cds sequences with MUSCLE/3.8.31 
+## Edgar, R.C. (2010)
+## Quality measures for protein alignment benchmarks
+## Nucleic Acids Res., 2010, 1–9.
+
+muscle -in cherryDAMs_AtSEP3.cds.fa -out cherryDAMs_AtSEP3.cds.afa
+
+# RAxML-NG to create phylogeny
+## Excellent tutorial for RAxML-NG is at https://github.com/amkozlov/raxml-ng 
+
+## --check function tells you if RAxML can read your alignment files
+## T.check files have list of identical sequences
+raxml-ng --check --msa cherryDAMs_AtSEP3.cds.afa --model GTR+G --prefix T.check
+
+raxml-ng --bootstrap --msa cherryDAMs_AtSEP3.cds.afa --model GTR+G --prefix T1 --seed 4 --threads 8 --bs-trees 500 --redo --outgroup AtSEP3.NP_001185081.1
+#it converges at 450 but extras never hurt
+
+raxml-ng --consense MR80 --tree T1.raxml.bootstraps --prefix T1_collapsed
+
+# Re-rooted tree with Dendroscope3
+## D.H. Huson and C. Scornavacca, Dendroscope 3: An interactive tool for rooted phylogenetic trees and networks, Systematic Biology (2012).
+## https://uni-tuebingen.de/fakultaeten/mathematisch-naturwissenschaftliche-fakultaet/fachbereiche/informatik/lehrstuehle/algorithms-in-bioinformatics/software/dendroscope/
+
+# Image labeling with Inkscape 1.0.1 
+## https://inkscape.org
