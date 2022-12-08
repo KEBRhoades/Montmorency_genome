@@ -1,0 +1,35 @@
+# Aligned AA sequences with MUSCLE/3.8.31 
+## Edgar, R.C. (2010)
+## Quality measures for protein alignment benchmarks
+## Nucleic Acids Res., 2010, 1–9.
+
+muscle -in SRNases.aa.fasta -out SRNases.aa.afa
+muscle -in SFB.aa.fasta -out SFB.aa.afa
+
+# downloaded .afa files to local machine
+# visualization done in R using package ggmsa
+## http://yulab-smu.top/ggmsa/articles/ggmsa.html
+
+library(tidyverse)
+library(ggmsa)
+library(Biostrings)
+
+AAseq <- readAAMultipleAlignment("SRNase_with-NCBI-Pcer.aa.afa")
+
+Pfrut_SRNases1.60 <- ggmsa(AAseq, start = 1, end = 60, seq_name = T,
+                           color = "Chemistry_AA") +
+                      theme(text = element_text(size = 20))
+Pfrut_SRNases86.120 <- ggmsa(AAseq, start = 61, end = 120, seq_name = T,
+                             color = "Chemistry_AA") +
+  theme(text = element_text(size = 20))
+Pfrut_SRNases121.180 <- ggmsa(AAseq, start = 121, end = 180, seq_name = T,
+                              color = "Chemistry_AA")+
+  theme(text = element_text(size = 20))
+Pfrut_SRNases181.240 <- ggmsa(AAseq, start = 181, end = 240, seq_name = T,
+                              color = "Chemistry_AA")+
+  theme(text = element_text(size = 20))
+  
+  # do the same thing again but for the SFBs
+  # start/end points are entirely up to you, but ggmsa WILL try to cram the whole protein sequence into one panel if you let it
+  
+  # assembling the separate alignment figures into one figure and additional labeling was done in Inkscape 1.0.1 (https://inkscape.org)
