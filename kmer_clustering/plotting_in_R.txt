@@ -1,0 +1,81 @@
+# Hierarchical clustering analysis of 25mers in the 'Montmorency' genome to assign chromosomes to subgenomes
+# Creation of heatmap using same 25mer abundances per chromosome to illustrate groups of 25mers that appear to designate subgenomes
+
+# Set working directory to folder where dumps.col files are located
+# This is also very closely based on Kamil Jaron's oh-know tutorial: https://github.com/KamilSJaron/oh-know/wiki/Separate-sub-genomes-of-an-allopolyploid
+# But we had to modify it because we have *three* subgenomes kicking around in here
+
+library(tidyverse)
+
+## FOR EACH SET OF HOMOEOLOGS (each set designated based on synteny to the peach genome, see main paper figure 1):
+## import jellyfish data file
+##### PAIR 01
+chr1<-read.table("chr1.jf.dumps.larger10.col", header=F) %>%
+  'colnames<-' (c("kmer", "chr1"))
+chr2<-read.table("chr2.jf.dumps.larger10.col", header=F) %>%
+  'colnames<-' (c("kmer", "chr2"))
+chr3<-read.table("chr3.jf.dumps.larger10.col", header=F) %>%
+  'colnames<-' (c("kmer", "chr3"))
+
+pair01<-full_join(chr1, chr2, by="kmer") %>% full_join(chr3, by = "kmer")
+head(pair01)
+
+# filter to retain only 25mers that are present at least 2x as often in one homoeolog as in one or both of its sisters
+filtered_pair01<- pair01 %>% filter(chr1 > 2*chr2 | chr2 > 2*chr1  |
+                                      chr3 > 2*chr1 | chr1 > 2*chr3 |
+                                      chr3 > 2*chr2 | chr3 > 2*chr2)
+nrow(filtered_pair01) #sanity check
+
+## Now do this for the other 8 homoeolog groups (ommitted here for the sake of space)
+
+# 24 chr analysis: Merge all filtered pair objects
+df<-full_join(filtered_pair01, filtered_pair02, by="kmer") %>%
+  full_join(filtered_pair03, by="kmer") %>% full_join(filtered_pair04, by="kmer") %>%
+  full_join(filtered_pair05, by="kmer") %>% full_join(filtered_pair06, by="kmer") %>%
+  full_join(filtered_pair07, by="kmer") %>% full_join(filtered_pair08, by="kmer")
+
+# 22 chr analysis: Merge filtered pair objects 1-7 and chromosome 24 (chr8B)
+df<-full_join(filtered_pair01, filtered_pair02, by="kmer") %>%
+  full_join(filtered_pair03, by="kmer") %>% full_join(filtered_pair04, by="kmer") %>%
+  full_join(filtered_pair05, by="kmer") %>% full_join(filtered_pair06, by="kmer") %>%
+  full_join(filtered_pair07, by="kmer") %>% full_join(chr24, by="kmer")
+  
+# Remove missing data
+cleaned_df<-df[complete.cases(df), ]
+
+# assign kmers to be rownames
+rownames(cleaned_df)<-cleaned_df$kmer
+# remove the kmer column
+squeaky_cleaned_df<-cleaned_df[,-1]
+
+# We transverse it to perform hierarchical clustering
+transversed_squeaky_cleaned_df<-t(squeaky_cleaned_df)
+
+# We calculate distances, make a hierarchical clustering object, and plot.
+dist_transversed_squeaky_cleaned_df <- dist(transversed_squeaky_cleaned_df)
+hclust_avg <- hclust(dist_transversed_squeaky_cleaned_df, method = "complete")
+plot(hclust_avg, main="25bp kmers at least 10x per chromosome, no missing data") #dendrogram showing subgenome clustering
+
+### Heatmap of 25mer abundances (similar to what Mitros et al., 2020 did for their figure 1b, hence my plot object name https://rdcu.be/c1gxC)
+# start with transversed_squeaky_cleaned_df object from above analysis
+
+# optional: our most abundant 25mer group was 2 25mers that didn't clearly designate a subgenome but did throw off my heatmap
+#  so I filtered them out of my initial df (above) before going back through to the transversed_squeaky_cleaned_df step:
+# df <- df %>% filter(kmer != "AAAAAAAAAAAAAAAAAAAAAAAAA" &
+#                     kmer != "TTTTTTTTTTTTTTTTTTTTTTTTT")
+
+
+library(pheatmap)
+library(RColorBrewer)
+
+miscanthus1b <- pheatmap(transversed_squeaky_cleaned_df, 
+                         color = colorRampPalette(brewer.pal(n = 9, 
+                                                             name = "OrRd"))(100),
+                         clustering_method = "complete",
+                         show_rownames = TRUE, 
+                         show_colnames = FALSE,
+                         main = "Relative abundance & hierarchical clustering of 25mers by P. cerasus chromosome")
+ 
+ # Plotting of 25mer densities in document "25mer_density_mapping_plotting.txt" in this folder
+ # For the analysis of A and A' chromosome sets only I did this same thing, just with 2 chromosomes/pair object and leaving out chr8A and chr8A' 
+ #  (full explanation of why in paper)
