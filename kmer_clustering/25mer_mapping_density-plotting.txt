@@ -1,0 +1,92 @@
+# Start with plotting_in_R.txt
+
+k4groups <- cutree(miscanthus1b$tree_col, k = 4)
+k4groups <- as.data.frame(k4groups)
+colnames(k4groups) <- c("group")
+k4groups$kmer <- rownames(k4groups)
+k4groups %>% group_by(group) %>% summarise(n =n())
+  # A tibble: 4 x 2
+  #   group     n
+  #   <int> <int>
+  #1     1     2
+  #2     2    60
+  #3     3   512
+  #4     4   278
+  
+  #So now we have a dataframe with 25mers and the groups they were assigned to based on hierarchical clustering
+  
+## OUTSIDE OF R: get 25mers for whole genome, map 25mers back to genome using BWA, get a samfile
+
+# count 25mers across whole genome
+jellyfish count -m 25 -s 100M -t 10 genome.fasta
+# generate a fasta of all 25mers present > 240x across whole genome (i.e. 10x per chromosome, present on all chromosomes like our above analysis was)
+jellyfish dump -L 240 25mers.jf > 25mers_wholegenome.fa
+
+# Turn the jellyfish fasta output into a fasta you can meaningfully align back to the genome: 
+sed -i '/^>/d' jellyfish_results.fasta #this deletes all rows starting with >
+sed p jellyfish_results.fasta > 25mers.fasta #duplicates all lines (which are 25mers)
+sed '1~2 s/^/>/g' < 25mers.fasta > your-25mers.fasta #add a > every other line starting
+# with line 1 so it'll be a real fasta file
+
+#Alignment with BWA
+bwa mem -k 25 -T 25 -a genome.fasta 25mers_wholegenome.fasta > 25mers_aligned.sam
+#-k min seed length of 25
+# -T min score of 25
+#-a report all matches 
+# with these settings BWA will report only exact matches (25/25 bases) and report all matches
+
+# Now, download 25mers_aligned.sam back to your local machine and import into R
+library(tidyverse)
+
+samfile <- read.delim("25mer_aligned.chrs.nohead.sam", header = F)
+samfile <- samfile[,1:6]
+colnames(samfile) <- c("kmer", "flag", "chr",
+                       "pos", "MAPQ", "CIGAR")
+head(samfile)
+# join kmer group assignments df to samfile df
+kmer_locs_groups <- left_join(samfile, k4groups, by = "kmer")
+# making the group and chr variables factors makes subseqent steps easier 
+kmer_locs_groups$group <- factor(kmer_locs_groups$group, 
+                                 levels = c("1", "2", "3", "4"))
+kmer_locs_groups$chr <- factor(kmer_locs_groups$chr, levels = c("1A", "2A", "3A", "4A", "5A", "6A", "7A", "8A",
+                                                                "1A__", "2A__", "3A__", "4A__", "5A__", "6A__", "7A__", "8A__",
+                                                                "1B", "2B", "3B", "4B", "5B", "6B", "7B", "8B"))
+kmer_locs_groups %>% group_by(group) %>% summarise(n =n())
+
+kmer_locs_groups <- kmer_locs_groups %>% filter(group == "1" |
+                                                  group == "2" |
+                                                  group == "3" |
+                                                  group == "4")
+
+#function Megabin assigns all position values (in bases) to a Mb window (e.g., positions 1,000,000 - 1,999,999 are in Megabin 1)
+MegaBin <- function(x){formatC(x/1000000, format = "d")}
+
+kmer_locs_groups$megabin <- sapply(kmer_locs_groups$pos, MegaBin)
+kmer_locs_groups$megabin <- as.numeric(kmer_locs_groups$megabin)
+
+# for each 1 Mb window get the proportion of bases occupied by 25mers from each of our assigned groups
+kmer_megabin_density <- kmer_locs_groups %>% group_by(chr, megabin, group) %>%
+  summarize(density = n()*25 / 1000000)
+
+#replace underscores with apostrophe for A' chromosomes
+kmer_megabin_density$chr <- str_replace_all(kmer_megabin_density$chr, "__", "'")
+
+# make chr variable a factor for ease of graphing
+kmer_megabin_density$chr <- factor(kmer_megabin_density$chr, levels = c("1A", "2A", "3A", "4A", "5A", "6A", "7A", "8A",
+                                                                "1A'", "2A'", "3A'", "4A'", "5A'", "6A'", "7A'", "8A'",
+                                                                "1B", "2B", "3B", "4B", "5B", "6B", "7B", "8B"))
+
+#centromere regions for graphing
+vlines_centro <- read.csv("vline-centromeres-dataframe.csv", header = T)
+
+plot_density <- ggplot(data = subset(kmer_megabin_density, 
+                                     group %in% c("4"))) + #pick whichever group you want to graph
+  geom_point(aes(x = megabin, y = density), 
+             color = "black", fill = "#ff709a", 
+             shape = 21, size = 2) +
+  geom_vline(data = vlines_centro, aes(xintercept = centro)) +
+  facet_wrap(~chr, scales = "free_x", ncol = 3) +
+  labs(title = "Density of Group 4 kmers, 1 Mb windows") +
+  theme_bw()+#base_size = 18) +
+  labs(x = "Megabases")
+plot_density
